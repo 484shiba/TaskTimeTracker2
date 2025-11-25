@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#3B82F6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="タスク記録">
+  <title>タスク時間記録</title>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ⚠️ ここにFirebaseの設定を貼り付けてください ⚠️
+    const firebaseConfig = {
+  apiKey: "AIzaSyBazLiYdO0nsVEou8-x1stiFDmDa3kGuYY",
+  authDomain: "tasktimetraker.firebaseapp.com",
+  projectId: "tasktimetraker",
+  storageBucket: "tasktimetraker.firebasestorage.app",
+  messagingSenderId: "654716377904",
+  appId: "1:654716377904:web:10fc33b37191aad65386f5"
+};
+
+    // Firebase初期化
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // デフォルトカラーパレット
+    const colorPalette = [
+      '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+      '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+      '#06B6D4', '#F43F5E', '#22C55E', '#A855F7', '#EAB308'
+    ];
+
+    // タスク名から一貫した色を生成
+    const getDefaultTaskColor = (taskName) => {
+      let hash = 0;
+      for (let i = 0; i < taskName.length; i++) {
+        hash = taskName.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colorPalette[Math.abs(hash) % colorPalette.length];
+    };
+
+    // アイコンコンポーネント
+    const PlusIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+    );
+
+    const ClockIcon = () => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+    );
+
+    const CalendarIcon = () => (
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-3 opacity-50">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    );
+
+    const BarChartIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="12" y1="20" x2="12" y2="10"></line>
+        <line x1="18" y1="20" x2="18" y2="4"></line>
+        <line x1="6" y1="20" x2="6" y2="16"></line>
+      </svg>
+    );
+
+    const TrendingUpIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+        <polyline points="17 6 23 6 23 12"></polyline>
+      </svg>
+    );
+
+    const SettingsIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M12 1v6m0 6v6m-9-9h6m6 0h6m-16.97 6.03l4.24-4.24m6.36 0l4.24 4.24M6.03 4.97l4.24 4.24m6.36 0l4.24-4.24"></path>
+      </svg>
+    );
+
+    const TrashIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+      </svg>
+    );
+
+    const ChevronDownIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    );
+
+    const ChevronUpIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    );
+
+    const ArrowLeftIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+    );
+
+    const UserIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    );
+
+    const LogOutIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+    );
+
+    const CloudIcon = () => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+      </svg>
+    );
+
+    const XIcon = () => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    );
+
+    function TaskTimeTracker() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [tasks, setTasks] = useState([]);
+      const [taskColors, setTaskColors] = useState({});
+      const [taskName, setTaskName] = useState('');
+      const [hours, setHours] = useState('');
+      const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+      const [view, setView] = useState('day');
+      const [syncing, setSyncing] = useState(false);
+      const [showColorSettings, setShowColorSettings] = useState(false);
+      const [expandedPeriods, setExpandedPeriods] = useState({});
+
+      useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          setUser(user);
+          setLoading(false);
+          if (user) {
+            loadTasksFromFirestore(user.uid);
+            loadTaskColors(user.uid);
+          }
+        });
+
+        return () => unsubscribe();
+      }, []);
+
+      const signInWithGoogle = async () => {
+        try {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          await auth.signInWithPopup(provider);
+        } catch (error) {
+          console.error('ログインエラー:', error);
+          alert('ログインに失敗しました: ' + error.message);
+        }
+      };
+
+      const signOut = async () => {
+        try {
+          await auth.signOut();
+          setTasks([]);
+          setTaskColors({});
+        } catch (error) {
+          console.error('ログアウトエラー:', error);
+        }
+      };
+
+      const loadTasksFromFirestore = async (userId) => {
+        try {
+          setSyncing(true);
+          const snapshot = await db.collection('users').doc(userId).collection('tasks').get();
+          const loadedTasks = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setTasks(loadedTasks);
+        } catch (error) {
+          console.error('データ読み込みエラー:', error);
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const loadTaskColors = async (userId) => {
+        try {
+          const doc = await db.collection('users').doc(userId).collection('settings').doc('taskColors').get();
+          if (doc.exists) {
+            setTaskColors(doc.data().colors || {});
+          }
+        } catch (error) {
+          console.error('色設定読み込みエラー:', error);
+        }
+      };
+
+      const saveTaskColors = async (colors) => {
+        if (!user) return;
+        try {
+          await db.collection('users').doc(user.uid).collection('settings').doc('taskColors').set({
+            colors: colors
+          });
+        } catch (error) {
+          console.error('色設定保存エラー:', error);
+        }
+      };
+
+      const getTaskColor = (taskName) => {
+        return taskColors[taskName] || getDefaultTaskColor(taskName);
+      };
+
+      const updateTaskColor = (taskName, color) => {
+        const newColors = { ...taskColors, [taskName]: color };
+        setTaskColors(newColors);
+        saveTaskColors(newColors);
+      };
+
+      const addTask = async () => {
+        if (!taskName || !hours || !date || !user) return;
+        
+        const newTask = {
+          name: taskName,
+          hours: parseFloat(hours),
+          date: date,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        try {
+          setSyncing(true);
+          const docRef = await db.collection('users').doc(user.uid).collection('tasks').add(newTask);
+          setTasks([...tasks, { id: docRef.id, ...newTask }]);
+          
+          if (!taskColors[taskName]) {
+            const newColors = { ...taskColors, [taskName]: getDefaultTaskColor(taskName) };
+            setTaskColors(newColors);
+            saveTaskColors(newColors);
+          }
+          
+          setTaskName('');
+          setHours('');
+        } catch (error) {
+          console.error('保存エラー:', error);
+          alert('保存に失敗しました');
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const deleteTask = async (id) => {
+        if (!user) return;
+        
+        try {
+          setSyncing(true);
+          await db.collection('users').doc(user.uid).collection('tasks').doc(id).delete();
+          setTasks(tasks.filter(t => t.id !== id));
+        } catch (error) {
+          console.error('削除エラー:', error);
+          alert('削除に失敗しました');
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const toggleExpand = (periodKey) => {
+        setExpandedPeriods(prev => ({
+          ...prev,
+          [periodKey]: !prev[periodKey]
+        }));
+      };
+
+      const getUniqueTaskNames = () => {
+        return [...new Set(tasks.map(t => t.name))].sort();
+      };
+
+      const getWeekNumber = (date) => {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+        const yearStart = new Date(d.getFullYear(), 0, 1);
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      };
+
+      const getWeekDateRange = (year, week) => {
+        const simple = new Date(year, 0, 1 + (week - 1) * 7);
+        const dow = simple.getDay();
+        const ISOweekStart = simple;
+        if (dow <= 4)
+          ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+        else
+          ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+        
+        const dates = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(ISOweekStart);
+          d.setDate(ISOweekStart.getDate() + i);
+          dates.push(d.toISOString().split('T')[0]);
+        }
+        return dates;
+      };
+
+      const formatDate = (dateStr) => {
+        const d = new Date(dateStr);
+        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+        return `${d.getMonth() + 1}月${d.getDate()}日(${dayNames[d.getDay()]})`;
+      };
+
+      const formatShortDate = (dateStr) => {
+        const d = new Date(dateStr);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      };
+
+      const getDaySummary = (limitDays = null) => {
+        const summary = {};
+        tasks.forEach(task => {
+          const key = task.date;
+          if (!summary[key]) summary[key] = {};
+          if (!summary[key][task.name]) summary[key][task.name] = 0;
+          summary[key][task.name] += task.hours;
+        });
+        
+        if (limitDays) {
+          const sortedDates = Object.keys(summary).sort().reverse().slice(0, limitDays);
+          const limited = {};
+          sortedDates.forEach(date => limited[date] = summary[date]);
+          return limited;
+        }
+        
+        return summary;
+      };
+
+      const getWeekSummary = (limitWeeks = null) => {
+        const summary = {};
+        tasks.forEach(task => {
+          const taskDate = new Date(task.date);
+          const year = taskDate.getFullYear();
+          const week = getWeekNumber(task.date);
+          const key = `${year}-W${week}`;
+          
+          if (!summary[key]) {
+            summary[key] = {
+              display: `${year}年 第${week}週`,
+              tasks: {},
+              year: year,
+              week: week
+            };
+          }
+          if (!summary[key].tasks[task.name]) summary[key].tasks[task.name] = 0;
+          summary[key].tasks[task.name] += task.hours;
+        });
+        
+        if (limitWeeks) {
+          const sortedKeys = Object.keys(summary).sort().reverse().slice(0, limitWeeks);
+          const limited = {};
+          sortedKeys.forEach(key => limited[key] = summary[key]);
+          return limited;
+        }
+        
+        return summary;
+      };
+
+      const getMonthSummary = (limitMonths = null) => {
+        const summary = {};
+        tasks.forEach(task => {
+          const taskDate = new Date(task.date);
+          const year = taskDate.getFullYear();
+          const month = taskDate.getMonth() + 1;
+          const key = `${year}-M${month}`;
+          
+          if (!summary[key]) {
+            summary[key] = {
+              display: `${year}年${month}月`,
+              tasks: {},
+              year: year,
+              month: month
+            };
+          }
+          if (!summary[key].tasks[task.name]) summary[key].tasks[task.name] = 0;
+          summary[key].tasks[task.name] += task.hours;
+        });
+        
+        if (limitMonths) {
+          const sortedKeys = Object.keys(summary).sort().reverse().slice(0, limitMonths);
+          const limited = {};
+          sortedKeys.forEach(key => limited[key] = summary[key]);
+          return limited;
+        }
+        
+        return summary;
+      };
+
+      const getYearSummary = () => {
+        const summary = {};
+        tasks.forEach(task => {
+          const taskDate = new Date(task.date);
+          const year = taskDate.getFullYear();
+          const key = `${year}`;
+          
+          if (!summary[key]) {
+            summary[key] = {
+              display: `${year}年`,
+              tasks: {},
+              year: year
+            };
+          }
+          if (!summary[key].tasks[task.name]) summary[key].tasks[task.name] = 0;
+          summary[key].tasks[task.name] += task.hours;
+        });
+        
+        return summary;
+      };
+
+      const getWeeksInMonth = (year, month) => {
+        const weeks = {};
+        tasks.forEach(task => {
+          const taskDate = new Date(task.date);
+          if (taskDate.getFullYear() === year && taskDate.getMonth() + 1 === month) {
+            const week = getWeekNumber(task.date);
+            const key = `${year}-W${week}`;
+            
+            if (!weeks[key]) {
+              weeks[key] = {
+                display: `第${week}週`,
+                tasks: {},
+                year: year,
+                week: week
+              };
+            }
+            if (!weeks[key].tasks[task.name]) weeks[key].tasks[task.name] = 0;
+            weeks[key].tasks[task.name] += task.hours;
+          }
+        });
+        return weeks;
+      };
+
+      const getMonthsInYear = (year) => {
+        const months = {};
+        tasks.forEach(task => {
+          const taskDate = new Date(task.date);
+          if (taskDate.getFullYear() === year) {
+            const month = taskDate.getMonth() + 1;
+            const key = `${year}-M${month}`;
+            
+            if (!months[key]) {
+              months[key] = {
+                display: `${month}月`,
+                tasks: {},
+                year: year,
+                month: month
+              };
+            }
+            if (!months[key].tasks[task.name]) months[key].tasks[task.name] = 0;
+            months[key].tasks[task.name] += task.hours;
+          }
+        });
+        return months;
+      };
+
+      const getDaysInWeek = (year, week) => {
+        const dates = getWeekDateRange(year, week);
+        const days = {};
+        
+        dates.forEach(dateStr => {
+          const tasksForDay = tasks.filter(t => t.date === dateStr);
+          if (tasksForDay.length > 0) {
+            days[dateStr] = {};
+            tasksForDay.forEach(task => {
+              if (!days[dateStr][task.name]) days[dateStr][task.name] = 0;
+              days[dateStr][task.name] += task.hours;
+            });
+          }
+        });
+        
+        return days;
+      };
+
+      const renderColorSettings = () => {
+        const uniqueTasks = getUniqueTaskNames();
+        
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">タスクの色設定</h2>
+                <button 
+                  onClick={() => setShowColorSettings(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XIcon />
+                </button>
+              </div>
+              
+              <div className="p-4 space-y-4">
+                {uniqueTasks.map(taskName => (
+                  <div key={taskName} className="border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-800">{taskName}</span>
+                      <div 
+                        className="w-8 h-8 rounded border-2 border-gray-300"
+                        style={{ backgroundColor: getTaskColor(taskName) }}
+                      ></div>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      {colorPalette.map(color => (
+                        <button
+                          key={color}
+                          onClick={() => updateTaskColor(taskName, color)}
+                          className={`w-full h-10 rounded border-2 transition-all ${
+                            getTaskColor(taskName) === color 
+                              ? 'border-gray-800 scale-110' 
+                              : 'border-gray-300 hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                    <input
+                      type="color"
+                      value={getTaskColor(taskName)}
+                      onChange={(e) => updateTaskColor(taskName, e.target.value)}
+                      className="w-full mt-2 h-10 rounded cursor-pointer"
+                    />
+                  </div>
+                ))}
+                
+                {uniqueTasks.length === 0 && (
+                  <div className="text-center py-8 text-gray-400">
+                    <p>タスクを追加すると色を設定できます</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const renderBarChart = (summary, maxCount = 10) => {
+        const periods = Object.keys(summary).sort().reverse().slice(0, maxCount);
+        if (periods.length === 0) return null;
+
+        const allTaskNames = new Set();
+        periods.forEach(period => {
+          const taskData = summary[period].tasks || summary[period];
+          Object.keys(taskData).forEach(name => allTaskNames.add(name));
+        });
+
+        const maxHours = Math.max(...periods.map(period => {
+          const taskData = summary[period].tasks || summary[period];
+          return Object.values(taskData).reduce((a, b) => a + b, 0);
+        }));
+
+        return (
+          <div className="bg-white rounded-lg p-4 shadow mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BarChartIcon />
+                <h3 className="font-bold text-lg text-gray-800">グラフ</h3>
+              </div>
+              <button
+                onClick={() => setShowColorSettings(true)}
+                className="flex items-center gap-2 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
+              >
+                <SettingsIcon />
+                色設定
+              </button>
+            </div>
+            
+            <div className="flex flex-wrap gap-3 mb-4 pb-4 border-b">
+              {Array.from(allTaskNames).map(taskName => (
+                <div key={taskName} className="flex items-center gap-2">
+                  <div 
+                    className="w-4 h-4 rounded"
+                    style={{ backgroundColor: getTaskColor(taskName) }}
+                  ></div>
+                  <span className="text-sm text-gray-700">{taskName}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              {periods.map(period => {
+                const periodData = summary[period];
+                const taskData = periodData.tasks || periodData;
+                const totalHours = Object.values(taskData).reduce((a, b) => a + b, 0);
+                const displayPeriod = periodData.display || formatShortDate(period);
+                
+                return (
+                  <div key={period}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-700 w-20">{displayPeriod}</span>
+                      <span className="text-xs text-gray-500">{totalHours.toFixed(1)}h</span>
+                    </div>
+                    <div className="flex h-8 bg-gray-100 rounded overflow-hidden">
+                      {Object.entries(taskData)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([name, hours]) => {
+                          const width = (hours / maxHours) * 100;
+                          return (
+                            <div
+                              key={name}
+                              className="flex items-center justify-center text-xs text-white font-medium"
+                              style={{
+                                width: `${width}%`,
+                                backgroundColor: getTaskColor(name),
+                                minWidth: width > 5 ? 'auto' : '0'
+                              }}
+                              title={`${name}: ${hours.toFixed(1)}h`}
+                            >
+                              {width > 10 && `${hours.toFixed(1)}h`}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      };
+
+      const renderPeriodDetail = (period, periodData, periodKey, showBackButton = false) => {
+        const taskData = periodData.tasks || periodData;
+        const totalHours = Object.values(taskData).reduce((a, b) => a + b, 0);
+        const displayPeriod = periodData.display || formatDate(period);
+        const isExpanded = expandedPeriods[periodKey];
+        
+        return (
+          <div key={period} className="bg-white rounded-lg p-4 shadow mb-4">
+            {showBackButton && (
+              <button
+                onClick={() => toggleExpand(periodKey)}
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-3 text-sm"
+              >
+                <ArrowLeftIcon />
+                戻る
+              </button>
+            )}
+            
+            <button
+              onClick={() => toggleExpand(periodKey)}
+              className="w-full flex items-center justify-between mb-3"
+            >
+              <h3 className="font-bold text-lg text-gray-800">{displayPeriod}</h3>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-600 font-semibold">合計: {totalHours.toFixed(1)}h</span>
+                {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+              </div>
+            </button>
+            
+            <div className="space-y-2">
+              {Object.entries(taskData)
+                .sort((a, b) => b[1] - a[1])
+                .map(([name, hours]) => (
+                  <div key={name} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded"
+                        style={{ backgroundColor: getTaskColor(name) }}
+                      ></div>
+                      <span className="text-gray-700">{name}</span>
+                    </div>
+                    <span className="text-blue-600 font-medium">{hours.toFixed(1)}h</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        );
+      };
+
+      const renderExpandedContent = (periodKey, periodData, view) => {
+        if (!expandedPeriods[periodKey]) return null;
+
+        // 週次 → 日次展開
+        if (view === 'week') {
+          const days = getDaysInWeek(periodData.year, periodData.week);
+          const sortedDays = Object.keys(days).sort().reverse();
+          
+          return (
+            <div className="ml-4 mt-4 space-y-3">
+              {renderBarChart(days, 7)}
+              {sortedDays.map(day => renderPeriodDetail(day, days[day], `${periodKey}-${day}`, false))}
+            </div>
+          );
+        }
+
+        // 月次 → 週次展開
+        if (view === 'month') {
+          const weeks = getWeeksInMonth(periodData.year, periodData.month);
+          const sortedWeeks = Object.keys(weeks).sort().reverse();
+          
+          return (
+            <div className="ml-4 mt-4 space-y-3">
+              {renderBarChart(weeks, sortedWeeks.length)}
+              {sortedWeeks.map(weekKey => {
+                const weekData = weeks[weekKey];
+                return (
+                  <div key={weekKey}>
+                    {renderPeriodDetail(weekKey, weekData, weekKey, false)}
+                    {renderExpandedContent(weekKey, weekData, 'week')}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+
+        // 年次 → 月次展開
+        if (view === 'year') {
+          const months = getMonthsInYear(periodData.year);
+          const sortedMonths = Object.keys(months).sort().reverse();
+          
+          return (
+            <div className="ml-4 mt-4 space-y-3">
+              {renderBarChart(months, 12)}
+              {sortedMonths.map(monthKey => {
+                const monthData = months[monthKey];
+                return (
+                  <div key={monthKey}>
+                    {renderPeriodDetail(monthKey, monthData, monthKey, false)}
+                    {renderExpandedContent(monthKey, monthData, 'month')}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+
+        return null;
+      };
+
+      const renderContent = () => {
+        if (view === 'day') {
+          const summary = getDaySummary(7);
+          return (
+            <>
+              {renderBarChart(summary, 7)}
+              <div className="flex items-center gap-2 mb-4 mt-6">
+                <TrendingUpIcon />
+                <h2 className="text-xl font-bold text-gray-800">詳細</h2>
+              </div>
+              {Object.keys(summary).sort().reverse().map(period => 
+                renderPeriodDetail(period, summary[period], period, false)
+              )}
+            </>
+          );
+        }
+
+        if (view === 'week') {
+          const summary = getWeekSummary(8);
+          const sortedKeys = Object.keys(summary).sort().reverse();
+          
+          return (
+            <>
+              {renderBarChart(summary, 8)}
+              <div className="flex items-center gap-2 mb-4 mt-6">
+                <TrendingUpIcon />
+                <h2 className="text-xl font-bold text-gray-800">詳細</h2>
+              </div>
+              {sortedKeys.map(periodKey => {
+                const periodData = summary[periodKey];
+                return (
+                  <div key={periodKey}>
+                    {renderPeriodDetail(periodKey, periodData, periodKey, false)}
+                    {renderExpandedContent(periodKey, periodData, 'week')}
+                  </div>
+                );
+              })}
+            </>
+          );
+        }
+
+        if (view === 'month') {
+          const summary = getMonthSummary(12);
+          const sortedKeys = Object.keys(summary).sort().reverse();
+          
+          return (
+            <>
+              {renderBarChart(summary, 12)}
+              <div className="flex items-center gap-2 mb-4 mt-6">
+                <TrendingUpIcon />
+                <h2 className="text-xl font-bold text-gray-800">詳細</h2>
+              </div>
+              {sortedKeys.map(periodKey => {
+                const periodData = summary[periodKey];
+                return (
+                  <div key={periodKey}>
+                    {renderPeriodDetail(periodKey, periodData, periodKey, false)}
+                    {renderExpandedContent(periodKey, periodData, 'month')}
+                  </div>
+                );
+              })}
+            </>
+          );
+        }
+
+        if (view === 'year') {
+          const summary = getYearSummary();
+          const sortedKeys = Object.keys(summary).sort().reverse();
+          
+          return (
+            <>
+              {renderBarChart(summary, sortedKeys.length)}
+              <div className="flex items-center gap-2 mb-4 mt-6">
+                <TrendingUpIcon />
+                <h2 className="text-xl font-bold text-gray-800">詳細</h2>
+              </div>
+              {sortedKeys.map(periodKey => {
+                const periodData = summary[periodKey];
+                return (
+                  <div key={periodKey}>
+                    {renderPeriodDetail(periodKey, periodData, periodKey, false)}
+                    {renderExpandedContent(periodKey, periodData, 'year')}
+                  </div>
+                );
+              })}
+            </>
+          );
+        }
+      };
+
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+            <div className="text-gray-600">読み込み中...</div>
+          </div>
+        );
+      }
+
+      if (!user) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+              <ClockIcon />
+              <h1 className="text-3xl font-bold text-gray-800 mb-2 mt-4">タスク時間記録</h1>
+              <p className="text-gray-600 mb-6">Googleアカウントでログインして、全端末でデータを同期</p>
+              <button
+                onClick={signInWithGoogle}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              >
+                <UserIcon />
+                Googleでログイン
+              </button>
+              <p className="text-xs text-gray-500 mt-4">
+                ログインすると、iPhone、PC、Androidなど<br/>全ての端末でデータが同期されます
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+          {showColorSettings && renderColorSettings()}
+          
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-xl shadow-lg p-4 mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {user.photoURL && (
+                  <img src={user.photoURL} alt="" className="w-10 h-10 rounded-full" />
+                )}
+                <div>
+                  <div className="font-medium text-gray-800">{user.displayName}</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <CloudIcon />
+                    {syncing ? '同期中...' : 'クラウド同期済み'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={signOut}
+                className="text-gray-600 hover:text-gray-800 flex items-center gap-2 text-sm"
+              >
+                <LogOutIcon />
+                ログアウト
+              </button>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <ClockIcon />
+                タスク時間記録
+              </h1>
+              <p className="text-gray-600 text-sm mb-2">後から振り返って作業時間を記録しましょう</p>
+              <p className="text-green-600 text-xs font-medium">✓ 全端末で自動同期</p>
+              
+              <div className="space-y-4 mt-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">タスク名</label>
+                  <input
+                    type="text"
+                    value={taskName}
+                    onChange={(e) => setTaskName(e.target.value)}
+                    placeholder="例: プロジェクトA作業"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">作業時間（時間）</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={hours}
+                      onChange={(e) => setHours(e.target.value)}
+                      placeholder="2.5"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">日付</label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                
+                <button
+                  onClick={addTask}
+                  disabled={syncing}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                >
+                  <PlusIcon />
+                  記録を追加
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+              <div className="flex gap-2 mb-4 overflow-x-auto">
+                <button
+                  onClick={() => setView('day')}
+                  className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    view === 'day' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  日次
+                </button>
+                <button
+                  onClick={() => setView('week')}
+                  className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    view === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  週次
+                </button>
+                <button
+                  onClick={() => setView('month')}
+                  className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    view === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  月次
+                </button>
+                <button
+                  onClick={() => setView('year')}
+                  className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    view === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  年次
+                </button>
+              </div>
+              
+              {tasks.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <CalendarIcon />
+                  <p>まだ記録がありません</p>
+                </div>
+              ) : (
+                renderContent()
+              )}
+            </div>
+
+            {tasks.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">最近の記録</h2>
+                <div className="space-y-2">
+                  {[...tasks].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10).map(task => (
+                    <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1 flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded flex-shrink-0"
+                          style={{ backgroundColor: getTaskColor(task.name) }}
+                        ></div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-800">{task.name}</div>
+                          <div className="text-sm text-gray-500">{formatDate(task.date)}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-blue-600">{task.hours}h</span>
+                        <button
+                          onClick={() => deleteTask(task.id)}
+                          disabled={syncing}
+                          className="text-red-500 hover:text-red-700 disabled:text-gray-400 transition-colors"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<TaskTimeTracker />);
+  </script>
+</body>
+</html>
