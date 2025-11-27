@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#3B82F6">
+  <title>タスク時間記録</title>
+  
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const firebaseConfig = {
+  apiKey: "AIzaSyBazLiYdO0nsVEou8-x1stiFDmDa3kGuYY",
+  authDomain: "tasktimetraker.firebaseapp.com",
+  projectId: "tasktimetraker",
+  storageBucket: "tasktimetraker.firebasestorage.app",
+  messagingSenderId: "654716377904",
+  appId: "1:654716377904:web:10fc33b37191aad65386f5"
+};
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    const colorPalette = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#F43F5E', '#22C55E', '#A855F7', '#EAB308'];
+
+    const getDefaultTaskColor = (taskName) => {
+      let hash = 0;
+      for (let i = 0; i < taskName.length; i++) {
+        hash = taskName.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colorPalette[Math.abs(hash) % colorPalette.length];
+    };
+
+    const PlusIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    const ClockIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+    const EditIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+    const TrashIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+    const SaveIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>;
+    const SettingsIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m-9-9h6m6 0h6"/></svg>;
+    const BarChartIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>;
+    const TrendingUpIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
+    const ChevronDownIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>;
+    const ChevronUpIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15"/></svg>;
+    const ChevronLeftIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>;
+    const ChevronRightIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>;
+    const ArrowLeftIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>;
+    const UserIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    const LogOutIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+    const CloudIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>;
+    const XIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    const FileTextIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+    const CalendarIcon = () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-3 opacity-50"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+
+    function TaskTimeTracker() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [tasks, setTasks] = useState([]);
+      const [taskColors, setTaskColors] = useState({});
+      const [reports, setReports] = useState({});
+      const [taskName, setTaskName] = useState('');
+      const [hours, setHours] = useState('');
+      const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+      const [view, setView] = useState('day');
+      const [syncing, setSyncing] = useState(false);
+      const [showColorSettings, setShowColorSettings] = useState(false);
+      const [showYearPicker, setShowYearPicker] = useState(false);
+      const [expandedPeriods, setExpandedPeriods] = useState({});
+      const [calendarDate, setCalendarDate] = useState(new Date());
+      const [selectedPeriod, setSelectedPeriod] = useState(null);
+      const [editingTasks, setEditingTasks] = useState(false);
+      const [editingReport, setEditingReport] = useState(false);
+      const [reportText, setReportText] = useState('');
+      const [editingTaskData, setEditingTaskData] = useState({});
+      const [newTaskName, setNewTaskName] = useState('');
+      const [newTaskHours, setNewTaskHours] = useState('');
+
+      useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          setUser(user);
+          setLoading(false);
+          if (user) {
+            loadTasksFromFirestore(user.uid);
+            loadTaskColors(user.uid);
+            loadReports(user.uid);
+          }
+        });
+        return () => unsubscribe();
+      }, []);
+
+      const signInWithGoogle = async () => {
+        try {
+          await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+        } catch (error) {
+          alert('ログインに失敗: ' + error.message);
+        }
+      };
+
+      const signOut = async () => {
+        try {
+          await auth.signOut();
+          setTasks([]);
+          setTaskColors({});
+          setReports({});
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      const loadTasksFromFirestore = async (userId) => {
+        try {
+          setSyncing(true);
+          const snapshot = await db.collection('users').doc(userId).collection('tasks').get();
+          setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const loadTaskColors = async (userId) => {
+        try {
+          const doc = await db.collection('users').doc(userId).collection('settings').doc('taskColors').get();
+          if (doc.exists) setTaskColors(doc.data().colors || {});
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      const loadReports = async (userId) => {
+        try {
+          const snapshot = await db.collection('users').doc(userId).collection('reports').get();
+          const loaded = {};
+          snapshot.docs.forEach(doc => loaded[doc.id] = doc.data().text || '');
+          setReports(loaded);
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      const saveTaskColors = async (colors) => {
+        if (!user) return;
+        await db.collection('users').doc(user.uid).collection('settings').doc('taskColors').set({ colors });
+      };
+
+      const saveReport = async (key, text) => {
+        if (!user) return;
+        await db.collection('users').doc(user.uid).collection('reports').doc(key).set({
+          text,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        setReports({ ...reports, [key]: text });
+      };
+
+      const getTaskColor = (name) => taskColors[name] || getDefaultTaskColor(name);
+
+      const updateTaskColor = (name, color) => {
+        const newColors = { ...taskColors, [name]: color };
+        setTaskColors(newColors);
+        saveTaskColors(newColors);
+      };
+
+      const addTask = async () => {
+        if (!taskName || !hours || !date || !user) return;
+        try {
+          setSyncing(true);
+          const docRef = await db.collection('users').doc(user.uid).collection('tasks').add({
+            name: taskName,
+            hours: parseFloat(hours),
+            date,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          setTasks([...tasks, { id: docRef.id, name: taskName, hours: parseFloat(hours), date }]);
+          if (!taskColors[taskName]) {
+            const newColors = { ...taskColors, [taskName]: getDefaultTaskColor(taskName) };
+            setTaskColors(newColors);
+            saveTaskColors(newColors);
+          }
+          setTaskName('');
+          setHours('');
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const addTaskForSelectedDate = async () => {
+        if (!newTaskName || !newTaskHours || !selectedPeriod || !user) return;
+        try {
+          setSyncing(true);
+          const docRef = await db.collection('users').doc(user.uid).collection('tasks').add({
+            name: newTaskName,
+            hours: parseFloat(newTaskHours),
+            date: selectedPeriod,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          setTasks([...tasks, { id: docRef.id, name: newTaskName, hours: parseFloat(newTaskHours), date: selectedPeriod }]);
+          if (!taskColors[newTaskName]) {
+            const newColors = { ...taskColors, [newTaskName]: getDefaultTaskColor(newTaskName) };
+            setTaskColors(newColors);
+            saveTaskColors(newColors);
+          }
+          setNewTaskName('');
+          setNewTaskHours('');
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const updateTask = async (id, newHours) => {
+        if (!user) return;
+        try {
+          setSyncing(true);
+          await db.collection('users').doc(user.uid).collection('tasks').doc(id).update({ hours: parseFloat(newHours) });
+          setTasks(tasks.map(t => t.id === id ? { ...t, hours: parseFloat(newHours) } : t));
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const deleteTask = async (id) => {
+        if (!user) return;
+        try {
+          setSyncing(true);
+          await db.collection('users').doc(user.uid).collection('tasks').doc(id).delete();
+          setTasks(tasks.filter(t => t.id !== id));
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      const getWeekNumber = (date) => {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+        const yearStart = new Date(d.getFullYear(), 0, 1);
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      };
+
+      const getWeekOfMonth = (dateStr) => {
+        const date = new Date(dateStr);
+        const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+        return Math.ceil((date.getDate() + firstDay.getDay()) / 7);
+      };
+
+      const getWeekDateRange = (year, week) => {
+        const simple = new Date(year, 0, 1 + (week - 1) * 7);
+        const dow = simple.getDay();
+        const start = new Date(simple);
+        if (dow <= 4) start.setDate(simple.getDate() - simple.getDay());
+        else start.setDate(simple.getDate() + 7 - simple.getDay());
+        const dates = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          dates.push(d.toISOString().split('T')[0]);
+        }
+        return dates;
+      };
+
+      const formatWeekLabel = (year, week) => {
+        const dates = getWeekDateRange(year, week);
+        const start = new Date(dates[0]);
+        const end = new Date(dates[6]);
+        const sm = start.getMonth() + 1;
+        const em = end.getMonth() + 1;
+        if (sm === em) return `${sm}月 第${getWeekOfMonth(dates[0])}週`;
+        return `${sm}~${em}月 第${getWeekOfMonth(dates[0])}週`;
+      };
+
+      const formatDate = (dateStr) => {
+        const d = new Date(dateStr);
+        const days = ['日', '月', '火', '水', '木', '金', '土'];
+        return `${d.getMonth() + 1}月${d.getDate()}日(${days[d.getDay()]})`;
+      };
+
+      const formatShortDate = (dateStr) => {
+        const d = new Date(dateStr);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      };
+
+// ⚠️ ここで Part 1 終了。Part 2 に続く ⚠️
+const getDaySummary = (limit = null) => {
+        const summary = {};
+        tasks.forEach(task => {
+          if (!summary[task.date]) summary[task.date] = {};
+          if (!summary[task.date][task.name]) summary[task.date][task.name] = 0;
+          summary[task.date][task.name] += task.hours;
+        });
+        if (limit) {
+          const sorted = Object.keys(summary).sort().reverse().slice(0, limit);
+          const limited = {};
+          sorted.forEach(d => limited[d] = summary[d]);
+          return limited;
+        }
+        return summary;
+      };
+
+      const getWeekSummary = (limit = null) => {
+        const summary = {};
+        tasks.forEach(task => {
+          const year = new Date(task.date).getFullYear();
+          const week = getWeekNumber(task.date);
+          const key = `${year}-W${week}`;
+          if (!summary[key]) summary[key] = { display: formatWeekLabel(year, week), tasks: {}, year, week };
+          if (!summary[key].tasks[task.name]) summary[key].tasks[task.name] = 0;
+          summary[key].tasks[task.name] += task.hours;
+        });
+        if (limit) {
+          const sorted = Object.keys(summary).sort().reverse().slice(0, limit);
+          const limited = {};
+          sorted.forEach(k => limited[k] = summary[k]);
+          return limited;
+        }
+        return summary;
+      };
+
+      const getMonthSummary = (limit = null) => {
+        const summary = {};
+        tasks.forEach(task => {
+          const d = new Date(task.date);
+          const key = `${d.getFullYear()}-M${d.getMonth() + 1}`;
+          if (!summary[key]) summary[key] = { display: `${d.getFullYear()}年${d.getMonth() + 1}月`, tasks: {}, year: d.getFullYear(), month: d.getMonth() + 1 };
+          if (!summary[key].tasks[task.name]) summary[key].tasks[task.name] = 0;
+          summary[key].tasks[task.name] += task.hours;
+        });
+        if (limit) {
+          const sorted = Object.keys(summary).sort().reverse().slice(0, limit);
+          const limited = {};
+          sorted.forEach(k => limited[k] = summary[k]);
+          return limited;
+        }
+        return summary;
+      };
+
+      const getYearSummary = () => {
+        const summary = {};
+        tasks.forEach(task => {
+          const year = new Date(task.date).getFullYear();
+          const key = `${year}`;
+          if (!summary[key]) summary[key] = { display: `${year}年`, tasks: {}, year };
+          if (!summary[key].tasks[task.name]) summary[key].tasks[task.name] = 0;
+          summary[key].tasks[task.name] += task.hours;
+        });
+        return summary;
+      };
+
+      const getWeeksInMonth = (year, month) => {
+        const weeks = {};
+        tasks.forEach(task => {
+          const d = new Date(task.date);
+          if (d.getFullYear() === year && d.getMonth() + 1 === month) {
+            const week = getWeekNumber(task.date);
+            const key = `${year}-W${week}`;
+            if (!weeks[key]) weeks[key] = { display: formatWeekLabel(year, week), tasks: {}, year, week };
+            if (!weeks[key].tasks[task.name]) weeks[key].tasks[task.name] = 0;
+            weeks[key].tasks[task.name] += task.hours;
+          }
+        });
+        return weeks;
+      };
+
+      const getMonthsInYear = (year) => {
+        const months = {};
+        tasks.forEach(task => {
+          const d = new Date(task.date);
+          if (d.getFullYear() === year) {
+            const m = d.getMonth() + 1;
+            const key = `${year}-M${m}`;
+            if (!months[key]) months[key] = { display: `${m}月`, tasks: {}, year, month: m };
+            if (!months[key].tasks[task.name]) months[key].tasks[task.name] = 0;
+            months[key].tasks[task.name] += task.hours;
+          }
+        });
+        return months;
+      };
+
+      const getDaysInWeek = (year, week) => {
+        const dates = getWeekDateRange(year, week);
+        const days = {};
+        dates.forEach(dateStr => {
+          const dayTasks = tasks.filter(t => t.date === dateStr);
+          if (dayTasks.length > 0) {
+            days[dateStr] = {};
+            dayTasks.forEach(t => {
+              if (!days[dateStr][t.name]) days[dateStr][t.name] = 0;
+              days[dateStr][t.name] += t.hours;
+            });
+          }
+        });
+        return days;
+      };
+
+      const handleDateClick = (dateStr) => {
+        if (selectedPeriod === dateStr) {
+          setSelectedPeriod(null);
+          setEditingTasks(false);
+          setEditingReport(false);
+        } else {
+          setSelectedPeriod(dateStr);
+          setEditingTasks(false);
+          setEditingReport(false);
+          setReportText(reports[dateStr] || '');
+        }
+      };
+
+      const handleWeekClick = (startDate) => {
+        const year = new Date(startDate).getFullYear();
+        const week = getWeekNumber(startDate);
+        const key = `${year}-W${week}`;
+        if (selectedPeriod === key) {
+          setSelectedPeriod(null);
+          setEditingReport(false);
+        } else {
+          setSelectedPeriod(key);
+          setEditingReport(false);
+          setReportText(reports[key] || '');
+        }
+      };
+
+      const handleMonthClick = () => {
+        const year = calendarDate.getFullYear();
+        const month = calendarDate.getMonth() + 1;
+        const key = `${year}-M${month}`;
+        if (selectedPeriod === key) {
+          setSelectedPeriod(null);
+          setEditingReport(false);
+        } else {
+          setSelectedPeriod(key);
+          setEditingReport(false);
+          setReportText(reports[key] || '');
+        }
+      };
+
+      const renderSelectedPeriodDetail = () => {
+        if (!selectedPeriod) return null;
+        let data = null, display = '', isDay = false;
+        if (!selectedPeriod.includes('W') && !selectedPeriod.includes('M')) {
+          data = getDaySummary()[selectedPeriod];
+          display = formatDate(selectedPeriod);
+          isDay = true;
+        } else if (selectedPeriod.includes('W')) {
+          const ws = getWeekSummary();
+          data = ws[selectedPeriod]?.tasks;
+          display = ws[selectedPeriod]?.display || selectedPeriod;
+        } else if (selectedPeriod.includes('M')) {
+          const ms = getMonthSummary();
+          data = ms[selectedPeriod]?.tasks;
+          display = ms[selectedPeriod]?.display || selectedPeriod;
+        }
+        if (!data || Object.keys(data).length === 0) {
+          return (
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl shadow-lg p-6 mb-6">
+              <h2 className="text-xl font-bold mb-4">{display}</h2>
+              <p className="text-gray-500">この期間にはタスクの記録がありません</p>
+            </div>
+          );
+        }
+        const total = Object.values(data).reduce((a, b) => a + b, 0);
+        const max = Math.max(...Object.values(data));
+        return (
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl shadow-lg p-6 mb-6">
+            <div className="flex justify-between mb-4">
+              <h2 className="text-xl font-bold">{display}</h2>
+              <span className="text-sm font-semibold">合計: {total.toFixed(1)}h</span>
+            </div>
+            <div className="mb-6">
+              <div className="flex flex-wrap gap-3 mb-3 pb-3 border-b border-blue-200">
+                {Object.keys(data).map(n => (
+                  <div key={n} className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded" style={{ backgroundColor: getTaskColor(n) }}></div>
+                    <span className="text-sm">{n}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {Object.entries(data).sort((a, b) => b[1] - a[1]).map(([name, hours]) => {
+                  const w = (hours / max) * 100;
+                  return (
+                    <div key={name}>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-sm font-medium">{name}</span>
+                        <span className="text-xs">{hours.toFixed(1)}h</span>
+                      </div>
+                      <div className="flex h-8 bg-white rounded overflow-hidden">
+                        <div className="flex items-center justify-center text-xs text-white font-medium" style={{ width: `${w}%`, backgroundColor: getTaskColor(name), minWidth: w > 5 ? 'auto' : '0' }}>
+                          {w > 15 && `${hours.toFixed(1)}h`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {isDay && (
+              <div className="mb-6 border-t border-blue-200 pt-4">
+                <div className="flex justify-between mb-3">
+                  <h3 className="font-bold">タスク詳細</h3>
+                  <button onClick={() => setEditingTasks(!editingTasks)} className="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                    <EditIcon />
+                    {editingTasks ? '完了' : '編集'}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {tasks.filter(t => t.date === selectedPeriod).map(task => (
+                    <div key={task.id} className="flex items-center justify-between p-3 bg-white rounded-lg">
+                      <div className="flex items-center gap-2 flex-1">
+                        <div className="w-3 h-3 rounded" style={{ backgroundColor: getTaskColor(task.name) }}></div>
+                        <span>{task.name}</span>
+                      </div>
+                      {editingTasks ? (
+                        <div className="flex items-center gap-2">
+                          <input type="number" step="0.5" defaultValue={task.hours} onChange={(e) => setEditingTaskData({ ...editingTaskData, [task.id]: e.target.value })} className="w-20 px-2 py-1 border rounded text-sm" />
+                          <button onClick={() => updateTask(task.id, editingTaskData[task.id] || task.hours)} className="p-1 text-blue-600"><SaveIcon /></button>
+                          <button onClick={() => deleteTask(task.id)} className="p-1 text-red-500"><TrashIcon /></button>
+                        </div>
+                      ) : (
+                        <span className="text-blue-600 font-medium">{task.hours}h</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {editingTasks && (
+                  <div className="mt-4 p-4 bg-white rounded-lg border-2 border-blue-300">
+                    <h4 className="font-medium mb-3">新規タスク追加</h4>
+                    <div className="space-y-2">
+                      <input type="text" value={newTaskName} onChange={(e) => setNewTaskName(e.target.value)} placeholder="タスク名" className="w-full px-3 py-2 border rounded-lg text-sm" />
+                      <div className="flex gap-2">
+                        <input type="number" step="0.5" value={newTaskHours} onChange={(e) => setNewTaskHours(e.target.value)} placeholder="時間" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                        <button onClick={addTaskForSelectedDate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">追加</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="border-t border-blue-200 pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <FileTextIcon />
+                <h3 className="font-bold">レポート</h3>
+              </div>
+              {editingReport ? (
+                <div className="space-y-3">
+                  <textarea value={reportText} onChange={(e) => setReportText(e.target.value)} placeholder="この期間のレポートを記入..." className="w-full px-4 py-3 border rounded-lg resize-none" rows="6" />
+                  <div className="flex gap-2">
+                    <button onClick={() => { saveReport(selectedPeriod, reportText); setEditingReport(false); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                      <SaveIcon />
+                      保存
+                    </button>
+                    <button onClick={() => { setEditingReport(false); setReportText(reports[selectedPeriod] || ''); }} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">キャンセル</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {reports[selectedPeriod] ? (
+                    <div className="bg-white p-4 rounded-lg mb-3 whitespace-pre-wrap">{reports[selectedPeriod]}</div>
+                  ) : (
+                    <div className="bg-white p-4 rounded-lg mb-3 text-gray-400 text-center">レポートが記入されていません</div>
+                  )}
+                  <button onClick={() => setEditingReport(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                    <EditIcon />
+                    {reports[selectedPeriod] ? '編集' : 'レポートを記入'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const renderCalendar = () => {
+        const year = calendarDate.getFullYear();
+        const month = calendarDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const weeks = [];
+        let days = [];
+        for (let i = 0; i < firstDay; i++) days.push(null);
+        for (let day = 1; day <= daysInMonth; day++) {
+          days.push(day);
+          if (days.length === 7) {
+            weeks.push(days);
+            days = [];
+          }
+        }
+        if (days.length > 0) {
+          while (days.length < 7) days.push(null);
+          weeks.push(days);
+        }
+        return (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={() => setCalendarDate(new Date(year, month - 1))} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronLeftIcon /></button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowYearPicker(true)} className="text-xl font-bold hover:text-blue-600">{year}年</button>
+                <button onClick={handleMonthClick} className="text-xl font-bold hover:text-blue-600">{month + 1}月</button>
+              </div>
+              <button onClick={() => setCalendarDate(new Date(year, month + 1))} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronRightIcon /></button>
+            </div>
+            <div className="grid grid-cols-8 gap-1">
+              <div></div>
+              {['日', '月', '火', '水', '木', '金', '土'].map(d => <div key={d} className="text-center text-sm font-medium py-2">{d}</div>)}
+              {weeks.map((week, wi) => {
+                const start = week.find(d => d !== null);
+                const startStr = start ? `${year}-${String(month + 1).padStart(2, '0')}-${String(start).padStart(2, '0')}` : null;
+                return (
+                  <React.Fragment key={wi}>
+                    <div className="flex items-center justify-center">
+                      {startStr && <button onClick={() => handleWeekClick(startStr)} className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs">›</button>}
+                    </div>
+                    {week.map((day, di) => {
+                      const dateStr = day ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
+                      const selected = dateStr === selectedPeriod;
+                      return (
+                        <div key={di} className="aspect-square">
+                          {day && <button onClick={() => handleDateClick(dateStr)} className={`w-full h-full flex items-center justify-center rounded-lg text-sm ${selected ? 'bg-blue-600 text-white font-bold' : 'hover:bg-blue-50'}`}>{day}</button>}
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        );
+      };
+
+      const renderYearPicker = () => {
+        const current = new Date().getFullYear();
+        const years = [];
+        for (let i = current - 10; i <= current + 10; i++) years.push(i);
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b p-4 flex justify-between">
+                <h2 className="text-xl font-bold">年を選択</h2>
+                <button onClick={() => setShowYearPicker(false)}><XIcon /></button>
+              </div>
+              <div className="p-4 grid grid-cols-3 gap-3">
+                {years.map(y => (
+                  <button key={y} onClick={() => { setCalendarDate(new Date(y, calendarDate.getMonth())); setShowYearPicker(false); }} className={`py-3 rounded-lg font-medium ${y === calendarDate.getFullYear() ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>{y}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const renderColorSettings = () => {
+        const unique = [...new Set(tasks.map(t => t.name))].sort();
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b p-4 flex justify-between">
+                <h2 className="text-xl font-bold">タスクの色設定</h2>
+                <button onClick={() => setShowColorSettings(false)}><XIcon /></button>
+              </div>
+              <div className="p-4 space-y-4">
+                {unique.map(name => (
+                  <div key={name} className="border rounded-lg p-3">
+                    <div className="flex justify-between mb-2">
+                      <span className="font-medium">{name}</span>
+                      <div className="w-8 h-8 rounded border-2" style={{ backgroundColor: getTaskColor(name) }}></div>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      {colorPalette.map(c => (
+                        <button key={c} onClick={() => updateTaskColor(name, c)} className={`w-full h-10 rounded border-2 ${getTaskColor(name) === c ? 'border-gray-800 scale-110' : 'border-gray-300'}`} style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    <input type="color" value={getTaskColor(name)} onChange={(e) => updateTaskColor(name, e.target.value)} className="w-full mt-2 h-10 rounded cursor-pointer" />
+                  </div>
+                ))}
+                {unique.length === 0 && <div className="text-center py-8 text-gray-400">タスクを追加すると色を設定できます</div>}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const renderBarChart = (summary, maxCount = 10) => {
+        const periods = Object.keys(summary).sort().reverse().slice(0, maxCount);
+        if (periods.length === 0) return null;
+        const allNames = new Set();
+        periods.forEach(p => {
+          const data = summary[p].tasks || summary[p];
+          Object.keys(data).forEach(n => allNames.add(n));
+        });
+        const maxH = Math.max(...periods.map(p => {
+          const data = summary[p].tasks || summary[p];
+          return Object.values(data).reduce((a, b) => a + b, 0);
+        }));
+        return (
+          <div className="bg-white rounded-lg p-4 shadow mb-4">
+            <div className="flex justify-between mb-4">
+              <div className="flex items-center gap-2"><BarChartIcon /><h3 className="font-bold text-lg">グラフ</h3></div>
+              <button onClick={() => setShowColorSettings(true)} className="flex items-center gap-2 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"><SettingsIcon />色設定</button>
+            </div>
+            <div className="flex flex-wrap gap-3 mb-4 pb-4 border-b">
+              {Array.from(allNames).map(n => (
+                <div key={n} className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: getTaskColor(n) }}></div>
+                  <span className="text-sm">{n}</span>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3">
+              {periods.map(p => {
+                const pd = summary[p];
+                const data = pd.tasks || pd;
+                const total = Object.values(data).reduce((a, b) => a + b, 0);
+                const display = pd.display || formatShortDate(p);
+                return (
+                  <div key={p}>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm font-medium w-32">{display}</span>
+                      <span className="text-xs">{total.toFixed(1)}h</span>
+                    </div>
+                    <div className="flex h-8 bg-gray-100 rounded overflow-hidden">
+                      {Object.entries(data).sort((a, b) => b[1] - a[1]).map(([name, hours]) => {
+                        const w = (hours / maxH) * 100;
+                        return (
+                          <div key={name} className="flex items-center justify-center text-xs text-white font-medium" style={{ width: `${w}%`, backgroundColor: getTaskColor(name), minWidth: w > 5 ? 'auto' : '0' }} title={`${name}: ${hours.toFixed(1)}h`}>
+                            {w > 10 && `${hours.toFixed(1)}h`}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      };
+
+      const renderPeriodDetail = (period, data, key) => {
+        const taskData = data.tasks || data;
+        const total = Object.values(taskData).reduce((a, b) => a + b, 0);
+        const display = data.display || formatDate(period);
+        const expanded = expandedPeriods[key];
+        return (
+          <div key={period} className="bg-white rounded-lg p-4 shadow mb-4">
+            <button onClick={() => setExpandedPeriods({ ...expandedPeriods, [key]: !expanded })} className="w-full flex justify-between mb-3">
+              <h3 className="font-bold text-lg">{display}</h3>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold">合計: {total.toFixed(1)}h</span>
+                {expanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+              </div>
+            </button>
+            <div className="space-y-2">
+              {Object.entries(taskData).sort((a, b) => b[1] - a[1]).map(([name, hours]) => (
+                <div key={name} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded" style={{ backgroundColor: getTaskColor(name) }}></div>
+                    <span>{name}</span>
+                  </div>
+                  <span className="text-blue-600 font-medium">{hours.toFixed(1)}h</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      };
+
+      const renderExpandedContent = (key, data, viewType) => {
+        if (!expandedPeriods[key]) return null;
+        if (viewType === 'week') {
+          const days = getDaysInWeek(data.year, data.week);
+          const sorted = Object.keys(days).sort().reverse();
+          return (
+            <div className="ml-4 mt-4 space-y-3">
+              {renderBarChart(days, 7)}
+              {sorted.map(d => renderPeriodDetail(d, days[d], `${key}-${d}`))}
+            </div>
+          );
+        }
+        if (viewType === 'month') {
+          const weeks = getWeeksInMonth(data.year, data.month);
+          const sorted = Object.keys(weeks).sort().reverse();
+          return (
+            <div className="ml-4 mt-4 space-y-3">
+              {renderBarChart(weeks, sorted.length)}
+              {sorted.map(wk => {
+                const wd = weeks[wk];
+                return (
+                  <div key={wk}>
+                    {renderPeriodDetail(wk, wd, wk)}
+                    {renderExpandedContent(wk, wd, 'week')}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+        if (viewType === 'year') {
+          const months = getMonthsInYear(data.year);
+          const sorted = Object.keys(months).sort().reverse();
+          return (
+            <div className="ml-4 mt-4 space-y-3">
+              {renderBarChart(months, 12)}
+              {sorted.map(mk => {
+                const md = months[mk];
+                return (
+                  <div key={mk}>
+                    {renderPeriodDetail(mk, md, mk)}
+                    {renderExpandedContent(mk, md, 'month')}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+        return null;
+      };
+
+      const renderContent = () => {
+        if (view === 'day') {
+          const summary = getDaySummary(7);
+          return (
+            <>
+              {renderBarChart(summary, 7)}
+              <div className="flex items-center gap-2 mb-4 mt-6"><TrendingUpIcon /><h2 className="text-xl font-bold">詳細</h2></div>
+              {Object.keys(summary).sort().reverse().map(p => summary[p] && Object.keys(summary[p]).length > 0 ? renderPeriodDetail(p, summary[p], p) : null)}
+            </>
+          );
+        }
+        if (view === 'week') {
+          const summary = getWeekSummary(8);
+          const sorted = Object.keys(summary).sort().reverse();
+          return (
+            <>
+              {renderBarChart(summary, 8)}
+              <div className="flex items-center gap-2 mb-4 mt-6"><TrendingUpIcon /><h2 className="text-xl font-bold">詳細</h2></div>
+              {sorted.map(k => {
+                const pd = summary[k];
+                return (
+                  <div key={k}>
+                    {renderPeriodDetail(k, pd, k)}
+                    {renderExpandedContent(k, pd, 'week')}
+                  </div>
+                );
+              })}
+            </>
+          );
+        }
+        if (view === 'month') {
+          const summary = getMonthSummary(12);
+          const sorted = Object.keys(summary).sort().reverse();
+          return (
+            <>
+              {renderBarChart(summary, 12)}
+              <div className="flex items-center gap-2 mb-4 mt-6"><TrendingUpIcon /><h2 className="text-xl font-bold">詳細</h2></div>
+              {sorted.map(k => {
+                const pd = summary[k];
+                return (
+                  <div key={k}>
+                    {renderPeriodDetail(k, pd, k)}
+                    {renderExpandedContent(k, pd, 'month')}
+                  </div>
+                );
+              })}
+            </>
+          );
+        }
+        if (view === 'year') {
+          const summary = getYearSummary();
+          const sorted = Object.keys(summary).sort().reverse();
+          return (
+            <>
+              {renderBarChart(summary, sorted.length)}
+              <div className="flex items-center gap-2 mb-4 mt-6"><TrendingUpIcon /><h2 className="text-xl font-bold">詳細</h2></div>
+              {sorted.map(k => {
+                const pd = summary[k];
+                return (
+                  <div key={k}>
+                    {renderPeriodDetail(k, pd, k)}
+                    {renderExpandedContent(k, pd, 'year')}
+                  </div>
+                );
+              })}
+            </>
+          );
+        }
+      };
+
+      if (loading) return <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center"><div>読み込み中...</div></div>;
+
+      if (!user) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+              <h1 className="text-3xl font-bold mb-4">タスク時間記録</h1>
+              <p className="text-gray-600 mb-6">Googleアカウントでログインして、全端末でデータを同期</p>
+              <button onClick={signInWithGoogle} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg flex items-center justify-center gap-2">
+                <UserIcon />
+                Googleでログイン
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+          {showColorSettings && renderColorSettings()}
+          {showYearPicker && renderYearPicker()}
+          
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-xl shadow-lg p-4 mb-6 flex justify-between">
+              <div className="flex items-center gap-3">
+                {user.photoURL && <img src={user.photoURL} alt="" className="w-10 h-10 rounded-full" />}
+                <div>
+                  <div className="font-medium">{user.displayName}</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <CloudIcon />
+                    {syncing ? '同期中...' : 'クラウド同期済み'}
+                  </div>
+                </div>
+              </div>
+              <button onClick={signOut} className="text-gray-600 hover:text-gray-800 flex items-center gap-2 text-sm">
+                <LogOutIcon />
+                ログアウト
+              </button>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+              <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+                <ClockIcon />
+                タスク時間記録
+              </h1>
+              <p className="text-gray-600 text-sm mb-2">後から振り返って作業時間を記録しましょう</p>
+              <p className="text-green-600 text-xs font-medium">✓ 全端末で自動同期</p>
+              
+              <div className="space-y-4 mt-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1">タスク名</label>
+                  <input type="text" value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="例: プロジェクトA作業" className="w-full px-4 py-2 border rounded-lg" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">作業時間（時間）</label>
+                    <input type="number" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="2.5" className="w-full px-4 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">日付</label>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+                  </div>
+                </div>
+                <button onClick={addTask} disabled={syncing} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-3 rounded-lg flex items-center justify-center gap-2">
+                  <PlusIcon />
+                  記録を追加
+                </button>
+              </div>
+            </div>
+
+            {renderCalendar()}
+
+            {renderSelectedPeriodDetail()}
+
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+              <div className="flex gap-2 mb-4 overflow-x-auto">
+                <button onClick={() => setView('day')} className={`flex-1 py-2 px-3 rounded-lg font-medium whitespace-nowrap ${view === 'day' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>日次</button>
+                <button onClick={() => setView('week')} className={`flex-1 py-2 px-3 rounded-lg font-medium whitespace-nowrap ${view === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>週次</button>
+                <button onClick={() => setView('month')} className={`flex-1 py-2 px-3 rounded-lg font-medium whitespace-nowrap ${view === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>月次</button>
+                <button onClick={() => setView('year')} className={`flex-1 py-2 px-3 rounded-lg font-medium whitespace-nowrap ${view === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>年次</button>
+              </div>
+              {tasks.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <CalendarIcon />
+                  <p>まだ記録がありません</p>
+                </div>
+              ) : (
+                renderContent()
+              )}
+            </div>
+
+            {tasks.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold mb-4">最近の記録</h2>
+                <div className="space-y-2">
+                  {[...tasks].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10).map(t => (
+                    <div key={t.id} className="flex justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1 flex items-center gap-2">
+                        <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getTaskColor(t.name) }}></div>
+                        <div className="flex-1">
+                          <div className="font-medium">{t.name}</div>
+                          <div className="text-sm text-gray-500">{formatDate(t.date)}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-blue-600">{t.hours}h</span>
+                        <button onClick={() => deleteTask(t.id)} disabled={syncing} className="text-red-500 hover:text-red-700 disabled:text-gray-400">
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<TaskTimeTracker />);
+  </script>
+</body>
+</html>
